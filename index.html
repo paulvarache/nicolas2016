@@ -203,7 +203,7 @@
 
             Promise.all([
                 loadImages,
-                fetch('orelsinge.wav')
+                fetch('orelsinge.mp3')
                     .then(r => r.arrayBuffer())
                     .then(ab => audioContext.decodeAudioData(ab))
                     .then(b => processBuffer(b))
