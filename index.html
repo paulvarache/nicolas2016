@@ -4,8 +4,6 @@
         <title></title>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <link rel="import" href="./triangle.html">
-        <link rel="import" href="./cube.html">
         <link rel="import" href="./particle-system.html">
         <link rel="import" href="./buffer-analyser.html">
         <style>
@@ -193,18 +191,18 @@
             }
 
             let loadImages = Promise.all([
-                loadImage('/01.png'),
-                loadImage('/02.png'),
-                loadImage('/03.png'),
-                loadImage('/04.png'),
-                loadImage('/05.png'),
-                loadImage('/06.png'),
-                loadImage('/07.png'),
+                loadImage('01.png'),
+                loadImage('02.png'),
+                loadImage('03.png'),
+                loadImage('04.png'),
+                loadImage('05.png'),
+                loadImage('06.png'),
+                loadImage('07.png'),
             ]);
 
             Promise.all([
                 loadImages,
-                fetch('/orelsinge.wav')
+                fetch('orelsinge.wav')
                     .then(r => r.arrayBuffer())
                     .then(ab => audioContext.decodeAudioData(ab))
                     .then(b => processBuffer(b))
