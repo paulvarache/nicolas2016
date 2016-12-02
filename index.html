@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title></title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="import" href="./triangle.html">
+        <link rel="import" href="./cube.html">
+        <link rel="import" href="./particle-system.html">
+        <link rel="import" href="./buffer-analyser.html">
+        <style>
+            html, body {
+                margin: 0;
+                padding: 0;
+            }
+            #debug {
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+            }
+            #input {
+                position: absolute;
+                top: 0;
+                right: 0;
+            }
+        </style>
+    </head>
+    <body>
+        <canvas id="canvas"></canvas>
+        <canvas id="debug"></canvas>
+        <script>
+
+            let c = document.getElementById('canvas'),
+                d = document.getElementById('debug'),
+                ctx, debugCtx, buffer, data, lowData, lowPeaks, highData, t, totalTime, startedAt;
+
+            let lowAnalyser, highAnalyser;
+
+            let faces, circles = [], winRad;
+
+            let lowParticlesRight, lowParticlesLeft, highParticles, cubeParticles;
+
+            window.addEventListener('resize', fitWindow);
+
+            function hslToRgb (h, s, l) {
+                let r = Math.sin(h * Math.PI / 180) * l;
+                let g = Math.sin((h + 120) * Math.PI / 180) * l;
+                let b = Math.sin((h + 240) * Math.PI / 180) * l;
+
+                let avg = (r + g + b) / 3;
+
+                r = ((r - avg) * s + avg);
+                g = ((g - avg) * s + avg);
+                b = ((b - avg) * s + avg);
+
+                return {
+                    r: Math.floor(r * 255),
+                    g: Math.floor(g * 255),
+                    b: Math.floor(b * 255)
+                };
+            }
+
+            function loadImage (src) {
+                return new Promise((resolve, reject) => {
+                    let img = document.createElement('img');
+                    img.onload = () => {
+                        resolve(img);
+                    };
+                    img.src = src;
+                });
+            }
+
+            function fitWindow () {
+                winRad = Math.sqrt(Math.pow(window.innerWidth, 2) + Math.pow(window.innerHeight, 2));
+                c.width = window.innerWidth;
+                c.height = window.innerHeight;
+                d.width = window.innerWidth;
+                d.height = 100;
+                ctx = c.getContext('2d');
+                debugCtx = d.getContext('2d');
+                lowParticlesLeft = new ParticleSystem({
+                    x: c.width / 2,
+                    y: c.height / 2,
+                    gravity: 0.3,
+                    initialVel: 9,
+                    maxSize: 6,
+                    speed: 25,
+                    number: 7,
+                    dataGenerator: () => {
+                        return {
+                            face: faces[Math.floor(Math.random() * faces.length)],
+                            a: 0
+                        };
+                    }
+                });
+            }
+
+            let lastFrame;
+
+            let s = 0.8;
+
+            function update (timestamp) {
+
+                dt = timestamp - (lastFrame || 0);
+                lastFrame = timestamp;
+                // Update stuff
+
+                let i = Math.floor((audioContext.currentTime - startedAt) / buffer.duration * data.length),
+                    dh = highAnalyser.distanceToClosestPeak(i),
+                    dl = lowAnalyser.distanceToClosestPeak(i);
+
+                if (dh > 0 && dh < 2000) {
+                    lowParticlesLeft.generate();
+                }
+                if (dl > 0 && dl < 2000) {
+                    circles.push({
+                        r: 0,
+                        color: '#' + Math.floor(Math.random() * 77215 + 16700000).toString(16)
+                    });
+                }
+
+                lowParticlesLeft.tick(dt);
+
+                lowParticlesLeft.particles.forEach(p => {
+                    p.data.a += p.vx;
+                });
+
+                circles.map(circle => {
+                    circle.r += ((winRad + 200) - circle.r) / 50;
+                });
+                
+                circles = circles.filter(circle => circle.r < winRad);
+
+                render();
+                requestAnimationFrame(update);
+            }
+
+
+            function render () {
+
+                ctx.save();
+                ctx.fillStyle = 'black';
+                // render stuff
+                ctx.fillRect(0, 0, c.width, c.height);
+
+                circles.forEach(circle => {
+                    ctx.save();
+                    ctx.translate(c.width / 2, c.height / 2);
+                    ctx.beginPath();
+                    ctx.fillStyle = circle.color;
+                    ctx.arc(0, 0, circle.r, 0, 2 * Math.PI);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.restore();
+                });
+
+                lowParticlesLeft.particles.forEach(p => {
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.scale(p.scale, p.scale);
+                    ctx.translate(10, 10);
+                    ctx.rotate(p.data.a * Math.PI / 180);
+                    ctx.translate(-10, -10);
+                    ctx.drawImage(p.data.face, 0, 0, 20, 20);
+                    ctx.restore();
+                });
+
+                ctx.restore();
+            }
+
+            let audioContext = new AudioContext(),
+                offline;
+
+            function processBuffer (b) {
+                buffer = b;
+                data = b.getChannelData(0);
+                highAnalyser = new BufferAnalyser(b);
+                lowAnalyser = new BufferAnalyser(b);
+                return Promise.all([
+                    highAnalyser.analyse('highpass', 2200, 0.8),
+                    lowAnalyser.analyse('lowpass', 300, 0.6),
+                ]).then(_ => {
+                    let source = audioContext.createBufferSource();
+                    source.buffer = buffer;
+
+                    source.connect(audioContext.destination);
+
+                    startedAt = audioContext.currentTime;
+
+                    source.start();
+                });
+            }
+
+            let loadImages = Promise.all([
+                loadImage('/01.png'),
+                loadImage('/02.png'),
+                loadImage('/03.png'),
+                loadImage('/04.png'),
+                loadImage('/05.png'),
+                loadImage('/06.png'),
+                loadImage('/07.png'),
+            ]);
+
+            Promise.all([
+                loadImages,
+                fetch('/orelsinge.wav')
+                    .then(r => r.arrayBuffer())
+                    .then(ab => audioContext.decodeAudioData(ab))
+                    .then(b => processBuffer(b))
+            ]).then(results => {
+                faces = results[0];
+                start();
+            });
+                
+
+            function start () {
+                fitWindow();
+                update();
+            }
+
+            function debugPeaks (peaks, data, height, offset) {
+                let x;
+                debugCtx.save();
+                debugCtx.fillStyle = 'white';
+                debugCtx.fillRect(0, offset, d.width, height);
+                debugCtx.fillStyle = 'black';
+                for (let i = 0; i < peaks.length; i++) {
+                    x = peaks[i] / data.length * d.width;
+                    debugCtx.fillRect(x, offset, 1, height);
+                }
+                debugCtx.restore();
+            }
+
+        </script>
+    </body>
+</html>
